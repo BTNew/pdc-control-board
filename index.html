@@ -134,7 +134,7 @@
             <div class="panel-header">
               <div>
                 <h2>Parts department home</h2>
-                <p>Focused view for parts ordering, parts completion and parts stoppages. Every imported vehicle is treated as needing parts until Parts signs it off.</p>
+                <p>Focused view for parts ordering, parts completion and parts stoppages. It hides Navision notes and production-only noise so Parts can work from status, stock, ETA, blockers and actions.</p>
               </div>
               <div class="panel-actions">
                 <button class="small-button" id="parts-export-csv" type="button">Export parts CSV</button>
@@ -160,7 +160,7 @@
             </div>
             <div class="parts-help-strip">
               <strong>Parts rule:</strong>
-              <span>Vehicles do not move into a Parts bucket. Parts sees all vehicles here, orders what is needed, marks complete, or records a stoppage.</span>
+              <span>Parts works this queue only: record stoppages first, mark Ordered when raised, then Complete when Parts has signed off. RFT remains blocked until Parts is complete.</span>
             </div>
             <div id="parts-home-content" class="parts-home-content"></div>
           </section>

@@ -5642,3 +5642,55 @@ body.pmb-schedule-adjusting .pmb-schedule-chip-slim {
   background: #f0f9ff !important;
   color: #0369a1 !important;
 }
+
+/* 2026-06-20 role-focused visual refresh: service-board hierarchy without workflow rewrites. */
+.parts-summary-card {
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+}
+.parts-summary-card:hover,
+.parts-summary-card:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, .11);
+  border-color: rgba(37, 99, 235, .36);
+}
+.parts-summary-card.parts-status-stoppage {
+  border-width: 2px;
+  box-shadow: 0 12px 26px rgba(220, 38, 38, .13);
+}
+.parts-row.parts-status-stoppage td:first-child,
+.parts-row.parts-status-stoppage td:nth-child(4) {
+  box-shadow: inset 4px 0 0 #dc2626;
+}
+.parts-table th:nth-child(1), .parts-table td:nth-child(1) { width: 140px; }
+.parts-table th:nth-child(2), .parts-table td:nth-child(2) { width: 132px; }
+.parts-table th:nth-child(3), .parts-table td:nth-child(3) { width: 150px; }
+.parts-table th:nth-child(4), .parts-table td:nth-child(4) { width: 230px; }
+.parts-table th:nth-child(5), .parts-table td:nth-child(5) { width: 280px; }
+.parts-table th:nth-child(6), .parts-table td:nth-child(6) { width: 220px; }
+.parts-table th:nth-child(7), .parts-table td:nth-child(7) { width: 210px; }
+.parts-table th:nth-child(8), .parts-table td:nth-child(8) { width: 160px; }
+.parts-table th:nth-child(9), .parts-table td:nth-child(9) { width: 70px; }
+.parts-table th:nth-child(10), .parts-table td:nth-child(10) { width: 150px; }
+.parts-action-group {
+  min-width: 250px;
+}
+.pmb-bay-help strong {
+  color: #0f172a;
+}
+.pmb-bay-card-status.single-station-status {
+  justify-content: flex-start;
+  gap: 6px;
+}
+.pmb-bay-chip.not-required {
+  background: #f8fafc;
+  border-color: rgba(148, 163, 184, .4);
+  color: #475569;
+}
+.pmb-bay-chip.blocked {
+  background: #fef2f2;
+  border-color: rgba(220, 38, 38, .45);
+  color: #991b1b;
+}
+.data-table tbody tr:hover td {
+  background-color: rgba(239, 246, 255, .72);
+}

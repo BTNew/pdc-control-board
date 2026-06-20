@@ -1541,7 +1541,7 @@ function renderPmbBranchTiles() {
   const allActive = !app.pmbSubFilter;
   host.innerHTML = `
     <div class="branch-header">
-      <div><strong>PMB control board</strong><span>Drag a PMB vehicle into a work stream, then click a stream header to open the 15-bay work line.</span></div>
+      <div><strong>PMB control board</strong><span>All PMB vehicles land in Unallocated first. Drag into Fabrication, Tint, Build, Electrical or Sublet only when that department is ready to own the work.</span></div>
       <div class="branch-header-actions">
         <button class="small-button ${allActive ? 'active-lite' : ''}" type="button" data-pmb-sub-filter="">Show all PMB (${pmbRows.length})</button>
         <button class="small-button ${app.pmbSubFilter === PMB_STAGE_UNASSIGNED_FILTER ? 'active-lite' : ''}" type="button" data-pmb-sub-filter="${PMB_STAGE_UNASSIGNED_FILTER}">Unallocated (${unassignedRows.length})</button>
@@ -1961,7 +1961,7 @@ function renderPmbBayBoardHtml(stage = '') {
           <button class="small-button" type="button" data-close-pmb-bays>Back to PMB buckets</button>
         </div>
       </div>
-      <div class="pmb-bay-help">Bay view only. Drag vehicles into a bay, set planned hours/mechanic on the card or vehicle popup, then tick Complete when that station has finished the work.</div>
+      <div class="pmb-bay-help"><strong>${escapeHtml(label)} station focus:</strong> ${escapeHtml(pmbStageOperatorGuidance(normalizedStage))}</div>
       <div class="pmb-bay-holding-grid">
         <section class="pmb-bay-unassigned" data-pmb-bay-drop-stage="${escapeHtml(normalizedStage)}" data-pmb-bay-drop-number="">
           <div class="pmb-bay-unassigned-title"><strong>Not in a bay</strong><span>${unassigned.length} waiting</span></div>
@@ -2260,6 +2260,28 @@ function renderPmbBayControlSection(v = {}) {
     </section>`;
 }
 
+function pmbStageOperatorGuidance(stage = '') {
+  const label = pmbStageLabel(stage);
+  return {
+    FABRICATION: 'Fabrication view: confirm fabrication work, planned hours, bay and technician only. Leave Tint / Electrical / Parts sign-off to their own pages.',
+    TINT: 'Tint view: confirm tint work, bay and technician only. Use Parts or other station pages for their own blockers and sign-offs.',
+    BUILD: 'Build view: confirm build/accessory fitment, bay and technician only. Do not use this page for Parts or Sublet updates.',
+    ELECTRICAL: 'Electrical view: confirm electrical work, planned hours, bay and technician only. Escalate non-electrical blockers instead of clearing other departments here.',
+    SUBLET: 'Sublet view: assign provider, planned time and completion only. Internal departments keep their own sign-offs.'
+  }[normalizePmbStage(stage)] || `${label} view: complete this station's work only.`;
+}
+
+function pmbCurrentStageStatusHtml(vehicle = {}, stage = '') {
+  const normalizedStage = normalizePmbStage(stage || inferredPmbStage(vehicle));
+  const jobDef = pmbStageJobDef(normalizedStage);
+  if (!jobDef) return '';
+  const required = pdcJobRequired(vehicle, jobDef);
+  const complete = pdcJobComplete(vehicle, jobDef);
+  const className = complete ? 'done' : required ? 'open' : 'not-required';
+  const label = complete ? `${jobDef.label} complete` : required ? `${jobDef.label} required` : `${jobDef.label} not required`;
+  return `<span class="pmb-bay-chip ${escapeHtml(className)}">${escapeHtml(label)}</span>`;
+}
+
 function pmbBayVehicleCardHtml(vehicle = {}, stage = '') {
   const normalizedStage = normalizePmbStage(stage || inferredPmbStage(vehicle));
   const key = vehicleKey(vehicle);
@@ -2287,9 +2309,9 @@ function pmbBayVehicleCardHtml(vehicle = {}, stage = '') {
       </div>
       <span class="pmb-bay-card-client">${escapeHtml(truncate(vehicle.client || vehicle.toyotaCustomer || 'Dealer Order', 32))}</span>
       <small>${escapeHtml(truncate(displayVehicle(vehicle), 42))}</small>
-      <div class="pmb-bay-card-status">
-        ${pdcJobMarkersHtml(vehicle, true)}
-        <span class="pmb-bay-chip ${complete ? 'done' : 'open'}">${complete ? `${escapeHtml(jobDef?.label || 'Job')} ✓` : `${escapeHtml(jobDef?.label || 'Job')} open`}</span>
+      <div class="pmb-bay-card-status single-station-status">
+        ${pmbCurrentStageStatusHtml(vehicle, normalizedStage)}
+        ${isPdcBlocked(vehicle) ? `<span class="pmb-bay-chip blocked">Blocked</span>` : ''}
       </div>
       <div class="pmb-bay-card-inputs">
         <label class="pmb-bay-hours">
@@ -4725,10 +4747,10 @@ function renderPartsSummary(rows = []) {
     return acc;
   }, { open: 0, toorder: 0, ordered: 0, stoppage: 0, complete: 0 });
   const cards = [
+    ['stoppage', 'Stoppages', counts.stoppage, 'Fix first — blocks RFT handover'],
     ['open', 'Open parts', counts.open, 'All incomplete parts work'],
-    ['toorder', 'To order', counts.toorder, 'Parts have not been marked ordered'],
-    ['ordered', 'Ordered / waiting', counts.ordered, 'Parts ordered but not complete'],
-    ['stoppage', 'Stoppages', counts.stoppage, 'Needs attention before RFT'],
+    ['toorder', 'To order', counts.toorder, 'Needs ordering or confirmation'],
+    ['ordered', 'Ordered / waiting', counts.ordered, 'Waiting on parts arrival'],
     ['complete', 'Complete', counts.complete, 'Signed off by Parts'],
   ];
   const host = $('#parts-summary-grid');
@@ -4756,14 +4778,14 @@ function renderPartsHome() {
     <thead><tr>
       <th>Parts status</th>
       <th>SN</th>
+      <th>ETA / age</th>
+      <th>Stoppage / blocker</th>
+      <th>Actions</th>
       <th>Client</th>
       <th>Vehicle</th>
-      <th>ETA / age</th>
       <th>Current stage</th>
       <th>Sales</th>
-      <th>Stoppage</th>
       <th>Last update</th>
-      <th>Actions</th>
     </tr></thead>
     <tbody>${rows.map(vehicle => {
       const key = vehicleKey(vehicle);
@@ -4776,19 +4798,19 @@ function renderPartsHome() {
       return `<tr class="parts-row ${escapeHtml(partsDepartmentStatusClass(status))}">
         <td><span class="parts-status-pill ${escapeHtml(partsDepartmentStatusClass(status))}">${escapeHtml(partsDepartmentStatusLabel(status))}</span></td>
         <td><button class="stock-link stock-button" type="button" data-open-stock="${escapeHtml(key)}">${escapeHtml(displayStockNumber(vehicle) || vehicle.order || 'No stock')}</button>${stockOrderSubline(vehicle)}</td>
-        <td><span title="${escapeHtml(vehicle.client || vehicle.toyotaCustomer || '')}">${escapeHtml(truncate(vehicle.client || vehicle.toyotaCustomer || 'Dealer Order', 34))}</span></td>
-        <td><span title="${escapeHtml(displayVehicle(vehicle))}">${escapeHtml(truncate(displayVehicle(vehicle), 48))}</span></td>
         <td><div class="parts-eta"><strong>${escapeHtml(eta || 'No ETA')}</strong><span class="pmb-age ${escapeHtml('pmb-age-' + ageClass)}">${escapeHtml(pmbAgeLabel(vehicle))}</span></div></td>
-        <td>${escapeHtml(stage + pmbStage)}</td>
-        <td>${escapeHtml(salesPersonInitials(consultantName(vehicle)))}</td>
-        <td>${status === 'stoppage' ? `<span class="parts-stoppage-text" title="${escapeHtml(partsStoppageReason(vehicle))}">${escapeHtml(truncate(partsStoppageReason(vehicle), 50))}</span>` : '<span class="subtle">None</span>'}</td>
-        <td>${escapeHtml(partsLastUpdateLabel(vehicle) || '')}</td>
+        <td>${status === 'stoppage' ? `<span class="parts-stoppage-text" title="${escapeHtml(partsStoppageReason(vehicle))}">${escapeHtml(truncate(partsStoppageReason(vehicle), 50))}</span>` : '<span class="subtle">No blocker recorded</span>'}</td>
         <td><div class="parts-action-group">
+          <button class="small-button danger-button" type="button" data-parts-stoppage="${escapeHtml(key)}" ${complete ? 'disabled' : ''}>Stoppage</button>
           <button class="small-button" type="button" data-parts-ordered="${escapeHtml(key)}" ${complete ? 'disabled' : ''}>Ordered</button>
           <button class="small-button primary" type="button" data-parts-complete="${escapeHtml(key)}">Complete</button>
-          <button class="small-button danger-button" type="button" data-parts-stoppage="${escapeHtml(key)}" ${complete ? 'disabled' : ''}>Stoppage</button>
           ${status === 'stoppage' ? `<button class="small-button" type="button" data-parts-clear-stoppage="${escapeHtml(key)}">Clear stoppage</button>` : ''}
         </div></td>
+        <td><span title="${escapeHtml(vehicle.client || vehicle.toyotaCustomer || '')}">${escapeHtml(truncate(vehicle.client || vehicle.toyotaCustomer || 'Dealer Order', 34))}</span></td>
+        <td><span title="${escapeHtml(displayVehicle(vehicle))}">${escapeHtml(truncate(displayVehicle(vehicle), 48))}</span></td>
+        <td>${escapeHtml(stage + pmbStage)}</td>
+        <td>${escapeHtml(salesPersonInitials(consultantName(vehicle)))}</td>
+        <td>${escapeHtml(partsLastUpdateLabel(vehicle) || '')}</td>
       </tr>`;
     }).join('')}</tbody></table></div>`;
   $$('[data-open-stock]', host).forEach(button => button.addEventListener('click', () => openVehicleModal(button.dataset.openStock)));
