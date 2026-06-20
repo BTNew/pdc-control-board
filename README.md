@@ -275,3 +275,4 @@ Changes made:
 
 
 2026-06-20 update: Vehicles transferred to PMB now always land in the Unallocated PMB bucket first. Required job ticks no longer auto-allocate a PMB work stream; vehicles only enter Fabrication/Tint/Build/Electrical/Sublet after being manually dragged there.
+
