@@ -102,8 +102,8 @@ const PMB_BAY_STATION_SEQUENCE = ['FABRICATION', 'TINT', 'BUILD', 'ELECTRICAL', 
 const PDC_JOB_DEFS = [
   { key: 'tint', label: 'Tint', short: 'T', requireKey: 'pdcRequiresTint', completeKey: 'pdcCompleteTint', completeAtKey: 'pdcCompleteTintAt', completeByKey: 'pdcCompleteTintBy' },
   { key: 'build', label: 'Build', short: 'B', requireKey: 'pdcRequiresBuild', completeKey: 'pdcCompleteBuild', completeAtKey: 'pdcCompleteBuildAt', completeByKey: 'pdcCompleteBuildBy' },
-  { key: 'electrical', label: 'Electrical', short: 'E', requireKey: 'pdcRequiresElectrical', completeKey: 'pdcCompleteElectrical', completeAtKey: 'pdcCompleteElectricalAt', completeByKey: 'pdcCompleteElectricalBy' },
   { key: 'parts', label: 'Parts', short: 'P', requireKey: 'pdcRequiresParts', completeKey: 'pdcCompleteParts', completeAtKey: 'pdcCompletePartsAt', completeByKey: 'pdcCompletePartsBy' },
+  { key: 'electrical', label: 'Electrical', short: 'E', requireKey: 'pdcRequiresElectrical', completeKey: 'pdcCompleteElectrical', completeAtKey: 'pdcCompleteElectricalAt', completeByKey: 'pdcCompleteElectricalBy' },
   { key: 'sublet', label: 'Sublet', short: 'S', requireKey: 'pdcRequiresSublet', completeKey: 'pdcCompleteSublet', completeAtKey: 'pdcCompleteSubletAt', completeByKey: 'pdcCompleteSubletBy' },
   { key: 'fabrication', label: 'Fabrication', short: 'F', requireKey: 'pdcRequiresFabrication', completeKey: 'pdcCompleteFabrication', completeAtKey: 'pdcCompleteFabricationAt', completeByKey: 'pdcCompleteFabricationBy' },
 ];
@@ -200,11 +200,11 @@ function inferredPmbStage(vehicle = {}) {
   // Only a manually assigned PMB work stream should place a vehicle into
   // Fabrication / Tint / Build / Electrical / Sublet.
   // Required work ticks do not allocate the vehicle into a production bucket.
-  return normalizePmbStage(vehicle.pmbStage || vehicle.pdcWorkStage || vehicle.workStage || '');
+  return normalizePmbStage(vehicle.pmbStage || '');
 }
 
 function pmbStageBadge(vehicle = {}) {
-  const stage = normalizePmbStage(vehicle.pmbStage || vehicle.pdcWorkStage || vehicle.workStage || '');
+  const stage = inferredPmbStage(vehicle);
   return stage ? `<span class="badge pmb-stage-badge pmb-stage-${escapeHtml(stage.toLowerCase())}">${escapeHtml(pmbStageLabel(stage))}</span>` : '';
 }
 
@@ -840,6 +840,7 @@ const STATUS_TAB_DEFS = [
   { key: 'pmb', label: 'Vehicles at PMB', className: 'status-tab-pmb', sub: 'Manual PDC location' },
   { key: 'rft', label: 'Vehicles RFT', className: 'status-tab-rft', sub: 'Manual PDC location' },
 ];
+const STATUS_TABS = STATUS_TAB_DEFS;
 
 function vehicleHasBatchNumber(vehicle = {}) {
   return !isBlankStock(vehicle.batch || vehicle.stock || vehicle.toyotaBatch || vehicle.autocareBatch || '');
@@ -905,6 +906,13 @@ function statusCategory(vehicleOrStatus = '') {
   if (isVehicle && vehicleHasBatchNumber(vehicleOrStatus)) return 'batchmatched';
 
   return 'other';
+}
+
+function statusCategoryLabel(vehicleOrStatus = '') {
+  const category = statusCategory(vehicleOrStatus);
+  const tab = STATUS_TAB_DEFS.find(item => item.key === category);
+  if (tab) return tab.label;
+  return category === 'other' ? 'Other' : category;
 }
 
 function statusClass(vehicleOrStatus = '') {
@@ -6293,6 +6301,10 @@ function buildNavisionHeaderMap(headers = []) {
   return map;
 }
 
+function buildHeaderMap(headers = []) {
+  return buildNavisionHeaderMap(headers);
+}
+
 function hasNavisionColumn(headerMap, column) {
   return headerMap.has(column) || headerMap.has(normalizeNavisionHeader(column));
 }
@@ -6423,6 +6435,32 @@ function buildExplicitPdcUpdatesFromImport(row, headerMap) {
   return updates;
 }
 
+function protectPmbFirstLandingFromImport(payload = {}, existing = {}) {
+  const incomingLocation = normalizePdcLocation(payload.pdcLocation || '');
+  const existingLocation = vehiclePdcLocation(existing);
+  if (incomingLocation !== 'PMB' || existingLocation === 'PMB') return payload;
+
+  // Import sheets may identify a vehicle as PMB, but the control-board rule is
+  // that the first PMB entry lands in Unallocated. Required jobs and PMB Bucket
+  // columns must not silently allocate Fabrication/Tint/Build/Electrical/Sublet.
+  payload.pmbStage = '';
+  payload.pdcWorkStage = '';
+  payload.workStage = '';
+  payload.pmbStageEnteredAt = '';
+  payload.pmbStageUpdatedAt = '';
+  payload.pmbBayStage = '';
+  payload.pmbBayNumber = '';
+  payload.pmbBayEstimatedHours = '';
+  payload.pmbBayEnteredAt = '';
+  payload.pmbBayScheduledStartAt = '';
+  payload.pmbBayCompletedAt = '';
+  payload.pmbBayCompletedBy = '';
+  payload.pmbBayCompletedStage = '';
+  payload.pmbBayMechanic = '';
+  payload.pmbSubletProvider = '';
+  return payload;
+}
+
 function applyExplicitPdcImportFields(payload, incoming = {}, existing = {}) {
   const keys = [
     'pdcRequiresTint','pdcRequiresBuild','pdcRequiresElectrical','pdcRequiresParts','pdcRequiresSublet','pdcRequiresFabrication',
@@ -6437,6 +6475,7 @@ function applyExplicitPdcImportFields(payload, incoming = {}, existing = {}) {
     }
   });
   if (!hasAny) return payload;
+  protectPmbFirstLandingFromImport(payload, existing);
   const now = nowIsoString();
   if (payload.pdcLocation && normalizePdcLocation(payload.pdcLocation) !== vehiclePdcLocation(existing)) {
     payload.pdcLocationUpdatedAt = now;
@@ -6552,7 +6591,7 @@ function buildNavisionVehicle(row, headerMap, excelRow) {
     trayFitmentComplete: trayComplete,
     navisionCutButVehicle: Boolean(cutButVehicleSource),
     navisionCutButVehicleSource: cutButVehicleSource,
-    ...buildExplicitPdcUpdatesFromImport(row, headerMap),
+    ...protectPmbFirstLandingFromImport(buildExplicitPdcUpdatesFromImport(row, headerMap), {}),
     importedAt: new Date().toISOString(),
   };
 }

@@ -3535,7 +3535,7 @@ body.pmb-dragging .pmb-drop-lane {
 .pdc-completion-grid input:checked + span {
   font-weight: 900;
 }
-.pmb-req-parts { background: #eef2ff; color: #3730a3; border-color: rgba(99, 102, 241, .35); }
+.pmb-req-parts { background: #fef2f2; color: #991b1b; border-color: rgba(239, 68, 68, .4); }
 .pmb-req-marker[role="button"] {
   cursor: pointer;
 }
