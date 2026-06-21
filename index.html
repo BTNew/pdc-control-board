@@ -144,23 +144,25 @@
             <div class="table-toolbar advanced-toolbar wide-toolbar parts-toolbar">
               <label>
                 <span>Search</span>
-                <input id="parts-search" type="search" placeholder="Stock, client, vehicle, salesperson..." />
+                <input id="parts-search" type="search" placeholder="Stock, client, vehicle, production status..." />
               </label>
               <label>
                 <span>Parts status</span>
                 <select id="parts-status-filter">
-                  <option value="open">To order / incomplete</option>
+                  <option value="open">Open parts</option>
                   <option value="all">All parts vehicles</option>
-                  <option value="toorder">To order</option>
-                  <option value="ordered">Ordered / waiting</option>
+                  <option value="notordered">Not Ordered</option>
+                  <option value="onorder">On Order</option>
                   <option value="stoppage">Stoppages</option>
-                  <option value="complete">Complete</option>
+                  <option value="issued">Issued</option>
+                  <option value="miscacc">Misc Acc</option>
+                  <option value="notrequired">Not Required</option>
                 </select>
               </label>
             </div>
             <div class="parts-help-strip">
               <strong>Parts rule:</strong>
-              <span>Parts works this queue only: record stoppages first, mark Ordered when raised, then Complete when Parts has signed off. RFT remains blocked until Parts is complete.</span>
+              <span>Parts works this queue only: Not Ordered blocks progress, On Order tracks waiting parts, Issued means Parts has signed off. RFT remains blocked until Parts is issued or not required.</span>
             </div>
             <div id="parts-home-content" class="parts-home-content"></div>
           </section>
@@ -444,7 +446,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="data.js"></script>
-  <script src="app.js"></script>
+  <script src="data.js?v=synthetic-test-100"></script>
+  <script src="app.js?v=synthetic-test-100"></script>
 </body>
 </html>

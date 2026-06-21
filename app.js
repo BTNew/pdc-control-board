@@ -3569,7 +3569,6 @@ function transferVehiclesToRft(vehicles = [], options = {}) {
   if (!window.confirm(`Transfer ${selected.length} PMB vehicle${selected.length === 1 ? '' : 's'} to Vehicles RFT?\n\n${preview}${more}\n\nThis marks the vehicle as Ready for Transport and keeps it protected from Navision location changes.${gateText}`)) return;
 
   const transferTime = nowIsoString();
-  const vehiclesToNotify = selected.slice();
   selected.forEach(vehicle => {
     recordVehicleAudit(vehicle, gate.overridden ? 'Transferred to RFT - gate override' : 'Transferred to RFT', { from: pmbStageLabel(inferredPmbStage(vehicle)) || 'PMB - Unallocated', to: 'RFT', completedJobs: pdcCompletedJobsText(vehicle), outstandingJobs: pdcOutstandingJobsText(vehicle), blocked: isPdcBlocked(vehicle) ? pdcBlockReason(vehicle) : '', overrideReason: gate.overridden ? gate.reason : '' });
     saveVehicleEdits(vehicleKey(vehicle), {
@@ -3591,9 +3590,6 @@ function transferVehiclesToRft(vehicles = [], options = {}) {
   populateFilters();
   renderAll();
 
-  if (window.confirm(`Would you like to notify the sales person that ${selected.length === 1 ? 'this vehicle is' : 'these vehicles are'} ready for transport?`)) {
-    draftRftSalespersonNotificationEmail(vehiclesToNotify);
-  }
 }
 
 
@@ -4669,29 +4665,40 @@ function partsOrdered(vehicle = {}) {
   return vehicle.pdcPartsOrdered === true || Boolean(cleanNavisionText(vehicle.pdcPartsOrderedAt || vehicle.partsOrderedAt || '')) || normalizeJita(jitaDisplay(vehicle)) === 'Yes';
 }
 
+function partsMiscAcc(vehicle = {}) {
+  const value = String(vehicle.pdcPartsMiscAcc || vehicle.partsMiscAcc || vehicle.navisionPartsStatus || vehicle.partsStatus || '').trim().toLowerCase();
+  return vehicle.pdcPartsMiscAcc === true || value === 'misc acc' || value === 'miscacc' || value.includes('misc acc');
+}
+
 function partsDepartmentStatus(vehicle = {}) {
   const def = partsJobDef();
-  if (def && pdcJobComplete(vehicle, def)) return 'complete';
+  if (!pdcJobRequired(vehicle, def)) return 'notrequired';
+  if (partsMiscAcc(vehicle)) return 'miscacc';
+  if (def && pdcJobComplete(vehicle, def)) return 'issued';
   if (vehicle.pdcPartsStoppage === true || cleanNavisionText(vehicle.pdcPartsStoppageReason || '')) return 'stoppage';
-  if (partsOrdered(vehicle)) return 'ordered';
-  return 'toorder';
+  if (partsOrdered(vehicle)) return 'onorder';
+  return 'notordered';
 }
 
 function partsDepartmentStatusLabel(status = '') {
   return {
-    toorder: 'To order',
-    ordered: 'Ordered / waiting',
+    notrequired: 'Not Required',
+    notordered: 'Not Ordered',
+    onorder: 'On Order',
     stoppage: 'Stoppage',
-    complete: 'Complete',
-  }[status] || 'To order';
+    issued: 'Issued',
+    miscacc: 'Misc Acc',
+  }[status] || 'Not Ordered';
 }
 
 function partsDepartmentStatusClass(status = '') {
   return {
-    toorder: 'parts-status-toorder',
-    ordered: 'parts-status-ordered',
+    notrequired: 'parts-status-complete',
+    notordered: 'parts-status-toorder',
+    onorder: 'parts-status-ordered',
     stoppage: 'parts-status-stoppage',
-    complete: 'parts-status-complete',
+    issued: 'parts-status-complete',
+    miscacc: 'parts-status-stoppage',
   }[status] || 'parts-status-toorder';
 }
 
@@ -4714,21 +4721,21 @@ function partsDepartmentRows() {
     .filter(vehicle => {
       const status = partsDepartmentStatus(vehicle);
       const matchesStatus = filter === 'all'
-        || (filter === 'open' && status !== 'complete')
+        || (filter === 'open' && !['issued', 'notrequired'].includes(status))
         || status === filter;
       if (!matchesStatus) return false;
       if (!q) return true;
       const productionLabel = productionMonthLabel(vehicle.prodMth || vehicle.productionMonth || '');
       const hay = [
         displayStockNumber(vehicle), vehicle.order, vehicle.client, vehicle.toyotaCustomer, displayVehicle(vehicle),
-        consultantName(vehicle), salesPersonInitials(consultantName(vehicle)), pdcLocationLabel(vehiclePdcLocation(vehicle)),
+        pdcLocationLabel(vehiclePdcLocation(vehicle)),
         statusCategoryLabel(vehicle), partsDepartmentStatusLabel(status), partsStoppageReason(vehicle), productionLabel,
         kewdaleEtaValue(vehicle), pmbAgeLabel(vehicle)
       ].join(' ').toLowerCase();
       return hay.includes(q);
     })
     .sort((a, b) => {
-      const rank = { stoppage: 0, toorder: 1, ordered: 2, complete: 3 };
+      const rank = { miscacc: 0, stoppage: 1, notordered: 2, onorder: 3, issued: 4, notrequired: 5 };
       const rankDiff = (rank[partsDepartmentStatus(a)] ?? 9) - (rank[partsDepartmentStatus(b)] ?? 9);
       if (rankDiff) return rankDiff;
       const ageA = pmbAgeDays(a);
@@ -4743,19 +4750,20 @@ function renderPartsSummary(rows = []) {
   const counts = all.reduce((acc, vehicle) => {
     const status = partsDepartmentStatus(vehicle);
     acc[status] = (acc[status] || 0) + 1;
-    if (status !== 'complete') acc.open += 1;
+    if (!['issued', 'notrequired'].includes(status)) acc.open += 1;
     return acc;
-  }, { open: 0, toorder: 0, ordered: 0, stoppage: 0, complete: 0 });
+  }, { open: 0, notordered: 0, onorder: 0, stoppage: 0, issued: 0, miscacc: 0, notrequired: 0 });
   const cards = [
     ['stoppage', 'Stoppages', counts.stoppage, 'Fix first — blocks RFT handover'],
     ['open', 'Open parts', counts.open, 'All incomplete parts work'],
-    ['toorder', 'To order', counts.toorder, 'Needs ordering or confirmation'],
-    ['ordered', 'Ordered / waiting', counts.ordered, 'Waiting on parts arrival'],
-    ['complete', 'Complete', counts.complete, 'Signed off by Parts'],
+    ['notordered', 'Not Ordered', counts.notordered, 'Required parts not ordered yet'],
+    ['onorder', 'On Order', counts.onorder, 'Waiting on parts arrival'],
+    ['issued', 'Issued', counts.issued, 'Issued and signed off by Parts'],
+    ['miscacc', 'Misc Acc', counts.miscacc, 'Misc accessory override'],
   ];
   const host = $('#parts-summary-grid');
   if (!host) return;
-  host.innerHTML = cards.map(([key, label, count, hint]) => `<button class="parts-summary-card ${escapeHtml(partsDepartmentStatusClass(key === 'open' ? 'toorder' : key))}" type="button" data-parts-summary-filter="${escapeHtml(key)}"><span>${escapeHtml(label)}</span><strong>${count}</strong><small>${escapeHtml(hint)}</small></button>`).join('');
+  host.innerHTML = cards.map(([key, label, count, hint]) => `<button class="parts-summary-card ${escapeHtml(partsDepartmentStatusClass(key === 'open' ? 'notordered' : key))}" type="button" data-parts-summary-filter="${escapeHtml(key)}"><span>${escapeHtml(label)}</span><strong>${count}</strong><small>${escapeHtml(hint)}</small></button>`).join('');
   $$('[data-parts-summary-filter]', host).forEach(button => button.addEventListener('click', () => {
     const select = $('#parts-status-filter');
     if (select) select.value = button.dataset.partsSummaryFilter || 'open';
@@ -4784,13 +4792,12 @@ function renderPartsHome() {
       <th>Client</th>
       <th>Vehicle</th>
       <th>Current stage</th>
-      <th>Sales</th>
       <th>Last update</th>
     </tr></thead>
     <tbody>${rows.map(vehicle => {
       const key = vehicleKey(vehicle);
       const status = partsDepartmentStatus(vehicle);
-      const complete = status === 'complete';
+      const complete = ['issued', 'notrequired'].includes(status);
       const eta = kewdaleEtaValue(vehicle);
       const ageClass = pmbAgeClass(vehicle);
       const stage = statusCategoryLabel(vehicle);
@@ -4809,7 +4816,6 @@ function renderPartsHome() {
         <td><span title="${escapeHtml(vehicle.client || vehicle.toyotaCustomer || '')}">${escapeHtml(truncate(vehicle.client || vehicle.toyotaCustomer || 'Dealer Order', 34))}</span></td>
         <td><span title="${escapeHtml(displayVehicle(vehicle))}">${escapeHtml(truncate(displayVehicle(vehicle), 48))}</span></td>
         <td>${escapeHtml(stage + pmbStage)}</td>
-        <td>${escapeHtml(salesPersonInitials(consultantName(vehicle)))}</td>
         <td>${escapeHtml(partsLastUpdateLabel(vehicle) || '')}</td>
       </tr>`;
     }).join('')}</tbody></table></div>`;
@@ -4891,12 +4897,12 @@ function clearVehiclePartsStoppage(key = '') {
 
 function exportPartsCsv() {
   const rows = partsDepartmentRows();
-  const headers = ['Parts Status','Stock','Toyota Order','Client','Vehicle','Kewdale ETA','Kewdale ETA Age','Current Stage','PMB Stage','Salesperson','Parts Ordered','Parts Ordered By','Parts Complete','Parts Complete By','Parts Stoppage','Parts Stoppage Reason','Last Parts Update'];
+  const headers = ['Parts Status','Stock','Toyota Order','Client','Vehicle','Kewdale ETA','Kewdale ETA Age','Current Stage','PMB Stage','Parts Ordered','Parts Ordered By','Parts Issued','Parts Issued By','Parts Stoppage','Parts Stoppage Reason','Last Parts Update'];
   const def = partsJobDef();
   const lines = [headers.join(',')].concat(rows.map(vehicle => [
     partsDepartmentStatusLabel(partsDepartmentStatus(vehicle)),
     displayStockNumber(vehicle), vehicle.order || '', vehicle.client || vehicle.toyotaCustomer || '', displayVehicle(vehicle),
-    kewdaleEtaValue(vehicle), pmbAgeLabel(vehicle), statusCategoryLabel(vehicle), pmbStageLabel(inferredPmbStage(vehicle)), consultantName(vehicle),
+    kewdaleEtaValue(vehicle), pmbAgeLabel(vehicle), statusCategoryLabel(vehicle), pmbStageLabel(inferredPmbStage(vehicle)),
     partsOrdered(vehicle) ? 'Yes' : 'No', vehicle.pdcPartsOrderedBy || '', def && pdcJobComplete(vehicle, def) ? 'Yes' : 'No', def ? (vehicle[def.completeByKey] || '') : '',
     vehicle.pdcPartsStoppage === true ? 'Yes' : 'No', partsStoppageReason(vehicle), partsLastUpdateLabel(vehicle)
   ].map(csvEscape).join(',')));

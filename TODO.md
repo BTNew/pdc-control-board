@@ -2,7 +2,6 @@
 
 ## High priority
 - Re-test import/paste workflow after every production-board change.
-- Confirm RFT gating includes every required job, especially Parts.
 - Continue refining department-specific views so each team sees only fields and actions they own.
 - Add clear WIP limit indicators per PMB stream once Craig confirms preferred limits.
 
@@ -17,3 +16,4 @@
 - Job ticks do not auto-allocate PMB production buckets.
 - Manual PMB `pmbStage` remains the only production bucket assignment.
 - Marker order remains T, B, P, E, S, F.
+- Parts must stay production-focused: no salesperson or finance fields in Parts views/exports.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06-21 — Parts and production rule alignment
+- Aligned Parts statuses to PDC wording: Not Required, Not Ordered, On Order, Issued, Misc Acc and Stoppage.
+- Kept Parts search/table/export focused on parts and production by removing salesperson fields from those views.
+- Removed the RFT salesperson notification prompt so RFT transfer stays production-only.
+- Added regression coverage for parts status rules and no-salesperson RFT prompts.
+
 ## 2026-06-20 — Role-focused visual management refresh
 - Reworked the Parts department page copy so it clearly hides Navision notes and production-only noise.
 - Reordered Parts summary cards to surface Stoppages first, then open/order/waiting/complete work.
