@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06-23 — Dashboard Parts stoppage bucket
+- Added a dashboard Parts Stoppage bucket for vehicles with an active Parts stoppage flag or blocker reason.
+- Kept completed Parts vehicles out of the active stoppage bucket and added regression coverage.
+
+## 2026-06-23 — Dashboard Parts tick visual states
+- Added dashboard Parts tick styling for required/not ordered, ordered/confirmed and received/issued states.
+- Added regression coverage so Parts visual classes stay limited to the Parts job tick.
+
 ## 2026-06-21 — Parts and production rule alignment
 - Aligned Parts statuses to PDC wording: Not Required, Not Ordered, On Order, Issued, Misc Acc and Stoppage.
 - Kept Parts search/table/export focused on parts and production by removing salesperson fields from those views.

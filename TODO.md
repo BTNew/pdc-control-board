@@ -6,6 +6,8 @@
 - Add clear WIP limit indicators per PMB stream once Craig confirms preferred limits.
 
 ## Next visual improvements
+- Validate the dashboard Parts tick colour palette with Craig after live review.
+- Validate the dashboard Parts Stoppage bucket wording/position with Craig after live review.
 - Add stronger ageing bands on PMB and Parts views.
 - Add compact exception lane for vehicles blocked by Parts, missing bay assignment or RFT gate issues.
 - Improve mobile/tablet spacing for the Parts table and PMB bay cards.

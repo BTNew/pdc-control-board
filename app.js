@@ -798,6 +798,14 @@ function checkboxCell(vehicle, key, label, shortLabel = '') {
   return `<label class="mini-check${jobClass}" title="${escapeHtml(label)}"><input type="checkbox" data-flag-stock="${escapeHtml(vehicleKey(vehicle))}" data-flag-key="${escapeHtml(key)}"${checked} /><span>${escapeHtml(shortLabel || label)}</span></label>`;
 }
 
+function pdcJobPartsVisualStatus(vehicle = {}, def = {}) {
+  if (def?.key !== 'parts') return '';
+  if (!pdcJobRequired(vehicle, def)) return '';
+  if (pdcJobComplete(vehicle, def) || vehicle.pdcPartsReceived === true) return 'issued';
+  if (partsOrdered(vehicle)) return 'onorder';
+  return 'notordered';
+}
+
 function pdcJobTableCell(vehicle, def) {
   if (!def) return '';
   if (statusCategory(vehicle) === 'rft') {
@@ -808,6 +816,12 @@ function pdcJobTableCell(vehicle, def) {
       ? `${def.label} was completed before RFT${meta ? ` · ${meta}` : ''}`
       : `${def.label} has not been signed off before RFT`;
     return `<label class="mini-check pdc-mini-${escapeHtml(def.key)} rft-completion-check ${checked ? 'is-complete' : 'is-missing'}" title="${escapeHtml(title)}"><input type="checkbox" data-flag-stock="${escapeHtml(vehicleKey(vehicle))}" data-flag-key="${escapeHtml(def.completeKey)}"${checked ? ' checked' : ''} /><span>${escapeHtml(def.short)}</span></label>`;
+  }
+  const partsVisualStatus = pdcJobPartsVisualStatus(vehicle, def);
+  if (partsVisualStatus) {
+    const checked = vehicleFlag(vehicle, def.requireKey) ? ' checked' : '';
+    const statusLabel = partsVisualStatus === 'issued' ? 'Parts received/there' : partsVisualStatus === 'onorder' ? 'Parts confirmed/ordered' : 'Parts required - not ordered';
+    return `<label class="mini-check pdc-mini-${escapeHtml(def.key)} parts-visual-${escapeHtml(partsVisualStatus)}" title="${escapeHtml(`${def.label} required · ${statusLabel}`)}"><input type="checkbox" data-flag-stock="${escapeHtml(vehicleKey(vehicle))}" data-flag-key="${escapeHtml(def.requireKey)}"${checked} /><span>${escapeHtml(def.short)}</span></label>`;
   }
   return checkboxCell(vehicle, def.requireKey, `${def.label} required`, def.short);
 }
@@ -834,6 +848,7 @@ function getStage(vehicle) {
 }
 
 const STATUS_TAB_DEFS = [
+  { key: 'partsstoppage', label: 'Parts Stoppage', className: 'status-tab-partsstoppage', sub: 'Stopped by Parts blocker' },
   { key: 'batchmatched', label: 'Batch Matched', className: 'status-tab-batchmatched', sub: 'Batch numbers matched · not in transit' },
   { key: 'prodtransit', label: 'Production / In Transit', className: 'status-tab-prodtransit', sub: 'Navision before arrival' },
   { key: 'yardhold', label: 'Vehicles at YH', className: 'status-tab-yardhold', sub: 'Navision Yard Hold / manual YH' },
@@ -2874,6 +2889,7 @@ function matchesQuickFilter(filter) {
   return (vehicle) => {
     if (!filter) return true;
     if (filter === 'batchmatched') return statusCategory(vehicle) === 'batchmatched';
+    if (filter === 'partsstoppage') return isActivePartsStoppage(vehicle);
     if (filter === 'partsrequired') {
       const parts = PDC_JOB_BY_KEY.get('parts');
       return Boolean(parts && pdcJobRequired(vehicle, parts) && !pdcJobComplete(vehicle, parts));
@@ -2885,6 +2901,7 @@ function matchesQuickFilter(filter) {
 function quickFilterLabel() {
   const base = {
     batchmatched: 'Batch Matched vehicles',
+    partsstoppage: 'Parts Stoppage vehicles',
     prodtransit: 'Production / In Transit vehicles',
     yardhold: 'Vehicles at YH',
     pmb: 'Vehicles at PMB',
@@ -4661,6 +4678,12 @@ function partsStoppageReason(vehicle = {}) {
   return cleanNavisionText(vehicle.pdcPartsStoppageReason || '') || 'Parts stoppage recorded';
 }
 
+function isActivePartsStoppage(vehicle = {}) {
+  const parts = PDC_JOB_BY_KEY.get('parts');
+  const hasStoppage = vehicle.pdcPartsStoppage === true || Boolean(cleanNavisionText(vehicle.pdcPartsStoppageReason || ''));
+  return Boolean(hasStoppage && parts && pdcJobRequired(vehicle, parts) && !pdcJobComplete(vehicle, parts));
+}
+
 function partsOrdered(vehicle = {}) {
   return vehicle.pdcPartsOrdered === true || Boolean(cleanNavisionText(vehicle.pdcPartsOrderedAt || vehicle.partsOrderedAt || '')) || normalizeJita(jitaDisplay(vehicle)) === 'Yes';
 }
@@ -4675,7 +4698,7 @@ function partsDepartmentStatus(vehicle = {}) {
   if (!pdcJobRequired(vehicle, def)) return 'notrequired';
   if (partsMiscAcc(vehicle)) return 'miscacc';
   if (def && pdcJobComplete(vehicle, def)) return 'issued';
-  if (vehicle.pdcPartsStoppage === true || cleanNavisionText(vehicle.pdcPartsStoppageReason || '')) return 'stoppage';
+  if (isActivePartsStoppage(vehicle)) return 'stoppage';
   if (partsOrdered(vehicle)) return 'onorder';
   return 'notordered';
 }

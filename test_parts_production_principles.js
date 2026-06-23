@@ -33,6 +33,20 @@ code += String.raw`
   assert(partsDepartmentStatus({ ...basePartsVehicle, pdcPartsOrdered: true }) === 'onorder', 'Ordered parts should show On Order');
   assert(partsDepartmentStatus({ ...basePartsVehicle, pdcCompleteParts: true }) === 'issued', 'Signed-off parts should show Issued');
   assert(partsDepartmentStatus({ ...basePartsVehicle, pdcCompleteParts: true, pdcPartsMiscAcc: true }) === 'miscacc', 'Misc Acc must override other Parts statuses');
+  assert(matchesQuickFilter('partsstoppage')({ ...basePartsVehicle, pdcPartsStoppage: true }), 'Parts stoppage dashboard bucket should include vehicles with a parts stoppage flag');
+  assert(matchesQuickFilter('partsstoppage')({ ...basePartsVehicle, pdcPartsStoppageReason: 'Waiting on bullbar' }), 'Parts stoppage dashboard bucket should include vehicles with a parts stoppage reason');
+  assert(!matchesQuickFilter('partsstoppage')({ ...basePartsVehicle, pdcPartsStoppage: true, pdcCompleteParts: true }), 'Completed Parts should not stay in the active stoppage bucket');
+  app.quickFilter = 'partsstoppage';
+  assert(quickFilterLabel() === 'Parts Stoppage vehicles', 'Parts stoppage quick filter should have a dashboard table heading');
+  app.quickFilter = 'batchmatched';
+
+  const partsDef = PDC_JOB_BY_KEY.get('parts');
+  assert(pdcJobTableCell(basePartsVehicle, partsDef).includes('parts-visual-notordered'), 'Dashboard Parts tick should be greyed when parts are required but not ordered');
+  assert(pdcJobTableCell({ ...basePartsVehicle, pdcPartsOrdered: true }, partsDef).includes('parts-visual-onorder'), 'Dashboard Parts tick should show ordered/confirmed state');
+  const issuedPartsCell = pdcJobTableCell({ ...basePartsVehicle, pdcCompleteParts: true }, partsDef);
+  assert(issuedPartsCell.includes('parts-visual-issued'), 'Dashboard Parts tick should show received/issued state');
+  assert(issuedPartsCell.includes('checked'), 'Received/issued Parts tick should remain checked');
+  assert(!pdcJobTableCell(basePartsVehicle, PDC_JOB_BY_KEY.get('build')).includes('parts-visual-'), 'Parts visual classes must not leak onto other job ticks');
 
   app.data = [basePartsVehicle];
   elementFor('#parts-search').value = 'Sales Person';

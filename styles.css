@@ -3050,7 +3050,7 @@ body.vehicle-table-header-pinned #vehicle-table thead {
 }
 
 .kpi-grid {
-  grid-template-columns: repeat(5, minmax(128px, 1fr)) !important;
+  grid-template-columns: repeat(6, minmax(128px, 1fr)) !important;
   gap: 8px !important;
 }
 .kpi-card.status-tab {
@@ -3076,6 +3076,7 @@ body.vehicle-table-header-pinned #vehicle-table thead {
   box-shadow: 0 12px 28px rgba(15, 23, 42, .12) !important;
   transform: translateY(-1px);
 }
+.status-tab-partsstoppage { border-left-color: #dc2626 !important; background: #fef2f2 !important; }
 .status-tab-batchmatched { border-left-color: #0ea5e9 !important; background: #eff6ff !important; }
 .status-tab-prodtransit { border-left-color: #f97316 !important; background: #fff7ed !important; }
 .status-tab-yardhold { border-left-color: #0ea5e9 !important; background: #e0f2fe !important; }
@@ -5596,6 +5597,31 @@ body.pmb-schedule-adjusting .pmb-schedule-chip-slim {
 #vehicle-table .mini-check.pdc-mini-tint input { accent-color: #06b6d4 !important; }
 #vehicle-table .mini-check.pdc-mini-build input { accent-color: #8b5cf6 !important; }
 #vehicle-table .mini-check.pdc-mini-parts input { accent-color: #ef4444 !important; }
+#vehicle-table .mini-check.pdc-mini-parts.parts-visual-notordered {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  opacity: .62;
+}
+#vehicle-table .mini-check.pdc-mini-parts.parts-visual-notordered input {
+  accent-color: #94a3b8 !important;
+}
+#vehicle-table .mini-check.pdc-mini-parts.parts-visual-onorder {
+  background: #eff6ff !important;
+  border: 1px solid #60a5fa !important;
+  opacity: 1;
+}
+#vehicle-table .mini-check.pdc-mini-parts.parts-visual-onorder input {
+  accent-color: #2563eb !important;
+}
+#vehicle-table .mini-check.pdc-mini-parts.parts-visual-issued {
+  background: #f0fdf4 !important;
+  border: 2px solid #22c55e !important;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, .18) !important;
+  opacity: 1;
+}
+#vehicle-table .mini-check.pdc-mini-parts.parts-visual-issued input {
+  accent-color: #dc2626 !important;
+}
 #vehicle-table .mini-check.pdc-mini-electrical input { accent-color: #22c55e !important; }
 #vehicle-table .mini-check.pdc-mini-sublet input { accent-color: #64748b !important; }
 #vehicle-table .mini-check.pdc-mini-fabrication input { accent-color: #f59e0b !important; }
