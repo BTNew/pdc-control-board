@@ -5720,3 +5720,143 @@ body.pmb-schedule-adjusting .pmb-schedule-chip-slim {
 .data-table tbody tr:hover td {
   background-color: rgba(239, 246, 255, .72);
 }
+
+
+/* Production schedule dashboard */
+.schedule-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.schedule-toolbar {
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 260px);
+}
+
+.schedule-content {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.schedule-bucket {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.schedule-bucket-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #f8fafc;
+}
+
+.schedule-bucket-header h3 {
+  margin: 0;
+  font-size: .95rem;
+}
+
+.schedule-bucket-overdue .schedule-bucket-header {
+  background: #fef2f2;
+}
+
+.schedule-bucket-today .schedule-bucket-header,
+.schedule-bucket-week .schedule-bucket-header {
+  background: #fffbeb;
+}
+
+.schedule-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.schedule-card {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, .05);
+}
+
+.schedule-card:hover {
+  border-color: rgba(220, 38, 38, .28);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, .09);
+}
+
+.schedule-card-main,
+.schedule-card-meta,
+.schedule-dept-row,
+.schedule-ready-row {
+  display: grid;
+  gap: 5px;
+}
+
+.schedule-card-main strong {
+  color: var(--toyota-red);
+  font-size: 1rem;
+}
+
+.schedule-card-main span,
+.schedule-card-meta span,
+.schedule-card-main small {
+  color: #475569;
+  font-size: .82rem;
+}
+
+.schedule-dept-row,
+.schedule-ready-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.schedule-dept-pill,
+.schedule-ready-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: .72rem;
+  font-weight: 850;
+  border: 1px solid transparent;
+}
+
+.schedule-dept-pill.is-open {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.schedule-dept-pill.is-complete,
+.schedule-ready-pill.ready {
+  background: #f0fdf4;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.schedule-dept-pill.neutral,
+.schedule-ready-pill.watch {
+  background: #fffbeb;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.schedule-ready-pill.blocked {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+@media (max-width: 760px) {
+  .schedule-toolbar { grid-template-columns: 1fr; }
+  .schedule-card-grid { grid-template-columns: 1fr; }
+}

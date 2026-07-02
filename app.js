@@ -98,6 +98,14 @@ const PMB_STAGE_AGE_LIMITS = {
 
 const PMB_BAY_COUNT = 15;
 const PMB_BAY_STATION_SEQUENCE = ['FABRICATION', 'TINT', 'BUILD', 'ELECTRICAL', 'SUBLET'];
+const PRODUCTION_FLOW_DEFS = [
+  { key: 'TINT', label: 'Tint', short: 'T', jobKey: 'tint', stage: 'TINT', search: /\b(tint|tinting|window tint)\b/i },
+  { key: 'HOIST', label: 'Hoist', short: 'H', jobKey: 'build', stage: 'BUILD', search: /\b(hoist|suspension|gvm|lift kit|lift|underbody|towbar|tow bar)\b/i },
+  { key: 'FITTING', label: 'Fitting', short: 'F', jobKey: 'build', stage: 'BUILD', search: /\b(fit|fitting|build|pdi|pre delivery|pre-delivery|accessor(?:y|ies)|job card|workshop)\b/i },
+  { key: 'FABRICATION', label: 'Fabrication', short: 'Fa', jobKey: 'fabrication', stage: 'FABRICATION', search: /\b(fab|fabricat|tray|canopy|body builder|bodybuilder|steel tray|aluminium tray|tub body|bullbar|bar work)\b/i },
+  { key: 'ELECTRICAL', label: 'Electrical', short: 'E', jobKey: 'electrical', stage: 'ELECTRICAL', search: /\b(electrical|auto electrical|auto-elec|12v|dual battery|battery system|uhf|spotlight|light bar|beacon|compressor|anderson|redarc|brake controller|dc dc|dcdc|dash cam|camera|reverse camera|power outlet|usb)\b/i },
+  { key: 'TYRE', label: 'Tyre bay', short: 'Ty', jobKey: 'build', stage: 'BUILD', search: /\b(tyre|tire|wheel|wheels|alloy|rotation|balance|alignment)\b/i },
+];
 
 const PDC_JOB_DEFS = [
   { key: 'tint', label: 'Tint', short: 'T', requireKey: 'pdcRequiresTint', completeKey: 'pdcCompleteTint', completeAtKey: 'pdcCompleteTintAt', completeByKey: 'pdcCompleteTintBy' },
@@ -1280,6 +1288,8 @@ function bindNav() {
   $('#jita-filter')?.addEventListener('change', () => { renderKpis(); renderVehicleTable(); });
   $('#parts-search')?.addEventListener('input', renderPartsHome);
   $('#parts-status-filter')?.addEventListener('change', renderPartsHome);
+  $('#schedule-search')?.addEventListener('input', renderScheduleBoard);
+  $('#schedule-department-filter')?.addEventListener('change', renderScheduleBoard);
   $('#parts-export-csv')?.addEventListener('click', exportPartsCsv);
   $('#customer-search')?.addEventListener('input', renderCustomers);
   $('#clear-table-filters')?.addEventListener('click', () => clearAllFilters());
@@ -1395,7 +1405,7 @@ function renderAdminLists() {
 function showView(view) {
   $$('.view').forEach(el => el.classList.toggle('active', el.id === view));
   $$('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
-  const titleMap = { dashboard: 'Dashboard', pipeline: 'Vehicle Pipeline', tv: 'PDC TV Board', parts: 'Parts Department', lists: 'PDC Lists', import: 'Uploads', zpl: 'ZPL Labels' };
+  const titleMap = { dashboard: 'Dashboard', pipeline: 'Vehicle Pipeline', tv: 'PDC TV Board', schedule: 'Production Schedule', parts: 'Parts Department', lists: 'PDC Lists', import: 'Uploads', zpl: 'ZPL Labels' };
   $('#page-title').textContent = titleMap[view] || 'Dashboard';
   if (view !== 'dashboard' && app.frozenHeaderCleanup) {
     app.frozenHeaderCleanup();
@@ -1406,6 +1416,9 @@ function showView(view) {
   }
   if (view === 'parts') {
     window.setTimeout(() => renderPartsHome(), 0);
+  }
+  if (view === 'schedule') {
+    window.setTimeout(() => renderScheduleBoard(), 0);
   }
 }
 
@@ -1444,6 +1457,7 @@ function renderAll() {
   renderVehicleTable();
   renderKanban();
   renderTvBoard();
+  renderScheduleBoard();
   renderPartsHome();
   renderAdminLists();
   renderCustomers();
@@ -4154,6 +4168,7 @@ function saveVehicleEdits(key, updates) {
   renderVehicleTable();
   renderKanban();
   renderTvBoard();
+  renderScheduleBoard();
   renderPartsHome();
   renderAdminLists();
   renderCustomers();
@@ -4669,6 +4684,134 @@ function renderKanban() {
   $$('.kanban-card').forEach(card => card.addEventListener('click', () => openVehicleModal(card.dataset.stock)));
 }
 
+
+
+function scheduleDateForVehicle(vehicle = {}) {
+  return parseDateAU(kewdaleEtaValue(vehicle) || scotEtaOnly(vehicle.etaAtDealer || '') || vehicle.deliveryDate || '');
+}
+
+function scheduleBucketForVehicle(vehicle = {}) {
+  const date = scheduleDateForVehicle(vehicle);
+  if (!date) return { key: 'unknown', label: 'No ETA set', rank: 4 };
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.floor((start - today) / (1000 * 60 * 60 * 24));
+  if (days < 0) return { key: 'overdue', label: 'Overdue / already at Kewdale', rank: 0 };
+  if (days === 0) return { key: 'today', label: 'Due today', rank: 1 };
+  if (days <= 7) return { key: 'week', label: 'Next 7 days', rank: 2 };
+  return { key: 'later', label: 'Later', rank: 3 };
+}
+
+function productionFlowSource(vehicle = {}) {
+  return [pdcJobSourceText(vehicle), vehicle.navisionNotes, vehicle.internalStatus, vehicle.toyotaStatus, displayVehicle(vehicle), (vehicle.poTasks || []).join(' ')].join(' ').toLowerCase();
+}
+
+function productionDepartmentRequired(vehicle = {}, def = {}) {
+  const job = PDC_JOB_BY_KEY.get(def.jobKey);
+  const stage = inferredPmbStage(vehicle);
+  const source = productionFlowSource(vehicle);
+  if (stage && stage === def.stage && ['TINT', 'FABRICATION', 'ELECTRICAL'].includes(def.key)) return true;
+  if (def.search?.test(source)) return true;
+  return Boolean(job && pdcJobRequired(vehicle, job) && def.key === 'FITTING');
+}
+
+function productionDepartmentComplete(vehicle = {}, def = {}) {
+  const job = PDC_JOB_BY_KEY.get(def.jobKey);
+  return Boolean(job && pdcJobComplete(vehicle, job));
+}
+
+function productionDepartmentsForVehicle(vehicle = {}) {
+  return PRODUCTION_FLOW_DEFS
+    .map(def => ({ ...def, required: productionDepartmentRequired(vehicle, def), complete: productionDepartmentComplete(vehicle, def) }))
+    .filter(def => def.required);
+}
+
+function readinessChecklistForVehicle(vehicle = {}) {
+  const parts = partsJobDef();
+  const fabrication = PDC_JOB_BY_KEY.get('fabrication');
+  const items = [];
+  if (parts && pdcJobRequired(vehicle, parts)) {
+    const status = partsDepartmentStatus(vehicle);
+    items.push({ label: `Parts: ${partsDepartmentStatusLabel(status)}`, state: ['issued', 'notrequired'].includes(status) ? 'ready' : (status === 'stoppage' || status === 'notordered' ? 'blocked' : 'watch') });
+  }
+  if (fabrication && pdcJobRequired(vehicle, fabrication)) {
+    items.push({ label: `Fabrication: ${pdcJobComplete(vehicle, fabrication) ? 'signed off' : 'required'}`, state: pdcJobComplete(vehicle, fabrication) ? 'ready' : 'watch' });
+  }
+  if (isPdcBlocked(vehicle)) items.push({ label: pdcBlockReason(vehicle), state: 'blocked' });
+  const issues = vehicleRftGateIssues(vehicle).filter(issue => !issue.startsWith('No PMB bucket'));
+  if (issues.length && !items.some(item => item.state === 'blocked')) items.push({ label: `${issues.length} RFT gate issue${issues.length === 1 ? '' : 's'}`, state: 'watch' });
+  return items;
+}
+
+function scheduleRows() {
+  const q = ($('#schedule-search')?.value || '').trim().toLowerCase();
+  const department = $('#schedule-department-filter')?.value || '';
+  return app.data
+    .filter(vehicleHasBatchNumber)
+    .map(vehicle => ({ vehicle, departments: productionDepartmentsForVehicle(vehicle), bucket: scheduleBucketForVehicle(vehicle), readiness: readinessChecklistForVehicle(vehicle) }))
+    .filter(row => row.departments.length || statusCategory(row.vehicle) === 'pmb')
+    .filter(row => !department || row.departments.some(def => def.key === department))
+    .filter(row => {
+      if (!q) return true;
+      const hay = [
+        displayStockNumber(row.vehicle), row.vehicle.order, row.vehicle.client, row.vehicle.toyotaCustomer,
+        displayVehicle(row.vehicle), pmbStageLabel(inferredPmbStage(row.vehicle)), statusCategoryLabel(row.vehicle),
+        row.departments.map(def => def.label).join(' '), row.readiness.map(item => item.label).join(' '),
+        kewdaleEtaValue(row.vehicle), pmbAgeLabel(row.vehicle), pdcBlockReason(row.vehicle)
+      ].join(' ').toLowerCase();
+      return hay.includes(q);
+    })
+    .sort((a, b) => a.bucket.rank - b.bucket.rank
+      || (scheduleDateForVehicle(a.vehicle)?.getTime() ?? Number.MAX_SAFE_INTEGER) - (scheduleDateForVehicle(b.vehicle)?.getTime() ?? Number.MAX_SAFE_INTEGER)
+      || String(displayStockNumber(a.vehicle) || '').localeCompare(String(displayStockNumber(b.vehicle) || ''), 'en-AU', { numeric: true }));
+}
+
+function scheduleDepartmentPillsHtml(departments = []) {
+  if (!departments.length) return '<span class="schedule-dept-pill neutral">Unallocated</span>';
+  return departments.map(def => `<span class="schedule-dept-pill ${def.complete ? 'is-complete' : 'is-open'}">${escapeHtml(def.label)}${def.complete ? ' ✓' : ''}</span>`).join('');
+}
+
+function scheduleReadinessHtml(items = []) {
+  if (!items.length) return '<span class="schedule-ready-pill ready">Ready prompts clear</span>';
+  return items.map(item => `<span class="schedule-ready-pill ${escapeHtml(item.state)}">${escapeHtml(item.label)}</span>`).join('');
+}
+
+function renderScheduleBoard() {
+  const host = $('#schedule-content');
+  if (!host) return;
+  const rows = scheduleRows();
+  const count = $('#schedule-count');
+  if (count) count.textContent = `${rows.length} vehicle${rows.length === 1 ? '' : 's'}`;
+  if (!rows.length) {
+    host.innerHTML = '<div class="empty-state"><strong>No vehicles match this schedule filter</strong><span>Clear search or choose another department.</span></div>';
+    return;
+  }
+  const bucketOrder = ['overdue', 'today', 'week', 'later', 'unknown'];
+  const bucketLabels = new Map(rows.map(row => [row.bucket.key, row.bucket.label]));
+  host.innerHTML = bucketOrder.filter(key => rows.some(row => row.bucket.key === key)).map(key => {
+    const bucketRows = rows.filter(row => row.bucket.key === key);
+    return `<section class="schedule-bucket schedule-bucket-${escapeHtml(key)}">
+      <div class="schedule-bucket-header"><h3>${escapeHtml(bucketLabels.get(key) || key)}</h3><span class="badge neutral">${bucketRows.length}</span></div>
+      <div class="schedule-card-grid">${bucketRows.map(({ vehicle, departments, readiness }) => `
+        <article class="schedule-card" data-stock="${escapeHtml(vehicleKey(vehicle))}">
+          <div class="schedule-card-main">
+            <strong>${escapeHtml(displayStockNumber(vehicle) || vehicle.order || 'No stock')}</strong>
+            <span>${escapeHtml(vehicle.client || vehicle.toyotaCustomer || 'Customer TBA')}</span>
+            <small>${escapeHtml(displayVehicle(vehicle))}</small>
+          </div>
+          <div class="schedule-card-meta">
+            <span>${escapeHtml(kewdaleEtaValue(vehicle) || 'No ETA')}</span>
+            <span>${escapeHtml(statusCategoryLabel(vehicle))}${inferredPmbStage(vehicle) ? ` · ${escapeHtml(pmbStageLabel(inferredPmbStage(vehicle)))}` : ''}</span>
+          </div>
+          <div class="schedule-dept-row">${scheduleDepartmentPillsHtml(departments)}</div>
+          <div class="schedule-ready-row">${scheduleReadinessHtml(readiness)}</div>
+        </article>`).join('')}</div>
+    </section>`;
+  }).join('');
+  $$('[data-stock]', host).forEach(card => card.addEventListener('click', () => openVehicleModal(card.dataset.stock)));
+}
 
 function partsJobDef() {
   return PDC_JOB_BY_KEY.get('parts');
